@@ -1,9 +1,52 @@
 const OpenAI = require('openai').default;
 
 exports.handler = async (event) => {
+  // Log pour debug
+  console.log('Event body:', event.body);
+  console.log('HTTP Method:', event.httpMethod);
+  
+  // Vérifier la méthode
+  if (event.httpMethod !== 'POST') {
+    return {
+      statusCode: 405,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      },
+      body: JSON.stringify({ error: 'Method not allowed' }),
+    };
+  }
+
+  // Gérer les requêtes OPTIONS (CORS)
+  if (event.httpMethod === 'OPTIONS') {
+    return {
+      statusCode: 200,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      },
+      body: '',
+    };
+  }
+
   try {
+    // Vérifier que le body existe
+    if (!event.body) {
+      return {
+        statusCode: 400,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
+        body: JSON.stringify({ error: 'Empty request body' }),
+      };
+    }
+
     const body = JSON.parse(event.body);
     const history = body.history || [];
+
+    console.log('History received:', JSON.stringify(history));
 
     const client = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
@@ -47,12 +90,16 @@ STRUCTURE DE RÉPONSE:
       ...history,
     ];
 
+    console.log('Calling OpenAI...');
+
     const response = await client.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: messages,
       temperature: 0.8,
       max_tokens: 800,
     });
+
+    console.log('OpenAI response received');
 
     return {
       statusCode: 200,
@@ -65,9 +112,14 @@ STRUCTURE DE RÉPONSE:
       }),
     };
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Error:', error.message);
+    console.error('Stack:', error.stack);
     return {
       statusCode: 500,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      },
       body: JSON.stringify({
         error: 'Error processing request',
         details: error.message,
